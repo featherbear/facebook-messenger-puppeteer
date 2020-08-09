@@ -72,7 +72,7 @@ module.exports = class {
     }
 
     await this._setTarget(target)
-    const inputElem = await this.page.$('[aria-label="Type a message..."]')
+    const inputElem = await this.page.$('[aria-label^="Type a message"]')
 
     await inputElem.type(data)
     await this.page.keyboard.press('Enter')
