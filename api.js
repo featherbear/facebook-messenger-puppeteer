@@ -5,7 +5,7 @@ module.exports = class {
   constructor () {
     this.browser = null
     this.page = null
-    this._listenFns = {}
+    this._listenFns = null // begin as null, change to []
     this._aliasMap = {}
   }
 
@@ -14,7 +14,10 @@ module.exports = class {
   }
 
   async login ({ email, password, session }) {
-    const browser = (this.browser = await puppeteer.launch({ headless: !process.env.DEBUG }))
+    console.log('Logging in...')
+    const browser = (this.browser = await puppeteer.launch({
+      headless: !process.env.DEBUG
+    }))
     const page = (this.page = (await browser.pages())[0]) // await browser.newPage())
 
     if (session) {
@@ -57,7 +60,7 @@ module.exports = class {
     const response = await this.page.goto(`${threadPrefix}${target}`, {
       waitUntil: 'domcontentloaded'
     })
-    
+
     slug = this.page.url().substr(threadPrefix.length)
     this._aliasMap[slug] = target
 
@@ -78,48 +81,77 @@ module.exports = class {
     await this.page.keyboard.press('Enter')
   }
 
-  stopListen (optionalCallback) {
+  _stopListen (optionalCallback) {
     const client = this.page._client
 
     if (typeof optionalCallback === 'function') {
-      client.off('Network.webSocketFrameReceived', this._listenFns[optionalCallback])
-      delete this._listenFns[optionalCallback]
+      client.off('Network.webSocketFrameReceived', optionalCallback)
+      this._listenFns = this._listenFns.filter(
+        callback => callback !== optionalCallback
+      )
     } else {
-      for (const fn of Object.values(this._listenFns)) {
-        client.off('Network.webSocketFrameReceived', fn)
+      for (const callback of this._listenFns) {
+        client.off('Network.webSocketFrameReceived', callback)
       }
-      this._listenFns = {}
+      this._listenFns = []
     }
   }
 
   listen (callback) {
-    if (!(callback in this._listenFns)) {
-      const fn = ({ timestamp, response: { payloadData } }) => {
-        if (payloadData.length > 16) {
-          try {
-            // :shrug:
-            const json = JSON.parse(atob(payloadData.substr(16)))
-
-            // Develop
-            if (json.deltas.length > 1) {
-              console.warn('More than one delta!')
-            }
-
-            for (const delta of json.deltas) {
-              callback(delta)
-            }
-          } catch (e) {
-            // * cries silently *
-            //   console.log(atob(payloadData.substr(16)))
-          }
-        }
+    return this.listenRaw(json => {
+      const data = {
+        body: json.body,
+        thread: Object.values(json.messageMetadata.threadKey)[0],
+        sender: json.messageMetadata.actorFbId,
+        timestamp: json.messageMetadata.timestamp,
+        messageId: json.messageMetadata.messageId,
+        attachments: json.attachments
       }
 
-      this.page._client.on('Network.webSocketFrameReceived', fn)
-      this._listenFns[callback] = fn
+      callback(data)
+    })
+  }
+
+  listenRaw (callback) {
+    if (this._listenFns === null) {
+      this._listenFns = []
+
+      this.page._client.on(
+        'Network.webSocketFrameReceived',
+        ({ timestamp, response: { payloadData } }) => {
+          if (payloadData.length > 16) {
+            try {
+              // :shrug:
+              const json = JSON.parse(atob(payloadData.substr(16)))
+
+              // Develop
+              if (json.deltas.length > 1) {
+                console.warn('More than one delta!')
+                console.log(json.deltas)
+              }
+
+              for (const delta of json.deltas) {
+                if (delta.class !== 'NewMessage') continue
+                // delta.messageMetadata.actorFbId // self.id
+
+                for (const callback of this._listenFns) {
+                  callback(delta)
+                }
+              }
+            } catch (e) {
+              // * cries silently *
+              //   console.log(atob(payloadData.substr(16)))
+            }
+          }
+        }
+      )
     }
 
-    return () => this.stopListen(callback)
+    if (this._listenFns.indexOf(callback) === -1) {
+      this._listenFns.push(callback)
+    }
+
+    return () => this._stopListen(callback)
   }
 
   async changeGroupPhoto (groupTarget, image) {
@@ -129,7 +161,9 @@ module.exports = class {
   async sendImage (target, imagePathOrImagePaths) {
     if (!imagePathOrImagePaths) return
 
-    const images = Array.isArray(imagePathOrImagePaths) ? imagePathOrImagePaths : Array(imagePathOrImagePaths)
+    const images = Array.isArray(imagePathOrImagePaths)
+      ? imagePathOrImagePaths
+      : Array(imagePathOrImagePaths)
     const uploadBtn = await this.page.$('input[type=file][title="Add Files"]')
 
     for (const imagePath of images) {
