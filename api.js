@@ -13,7 +13,7 @@ module.exports = class {
   }
 
   async login ({ email, password, session }) {
-    const browser = (this.browser = await puppeteer.launch({ headless: false }))
+    const browser = (this.browser = await puppeteer.launch({ headless: !process.env.DEBUG }))
     const page = (this.page = (await browser.pages())[0]) // await browser.newPage())
 
     if (session) {
