@@ -1,4 +1,5 @@
-.appstate.json
-node_modules/
 *.ignore
+.appstate.json
 
+node_modules/
+/config.json
