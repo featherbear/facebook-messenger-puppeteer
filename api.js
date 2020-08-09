@@ -2,11 +2,13 @@ const puppeteer = require('puppeteer')
 const atob = require('atob')
 
 module.exports = class {
-  constructor () {
+  constructor (options) {
+    this.options = options || {}
     this.browser = null
     this.page = null
     this._listenFns = null // begin as null, change to []
     this._aliasMap = {}
+    this.uid = null // string
   }
 
   async getSession () {
@@ -47,13 +49,21 @@ module.exports = class {
     if (emailField || passwordField || submitButton) {
       throw new Error('Bad credentials')
     }
+
+    this.uid = (await this.getSession()).find(
+      cookie => cookie.name === 'c_user'
+    ).value
+
+    console.log(`Logged in as ${this.uid}`)
   }
 
   async _setTarget (target) {
+    target = target.toString()
+
     const threadPrefix = 'https://www.messenger.com/t/'
     let slug = this.page.url().substr(threadPrefix.length)
 
-    if (target == slug || target == this._aliasMap[slug]) {
+    if (target === slug || target === this._aliasMap[slug]) {
       return null
     }
 
@@ -124,15 +134,14 @@ module.exports = class {
               // :shrug:
               const json = JSON.parse(atob(payloadData.substr(16)))
 
-              // Develop
-              if (json.deltas.length > 1) {
-                console.warn('More than one delta!')
-                console.log(json.deltas)
-              }
-
               for (const delta of json.deltas) {
                 if (delta.class !== 'NewMessage') continue
-                // delta.messageMetadata.actorFbId // self.id
+                if (
+                  delta.messageMetadata.actorFbId === this.uid &&
+                  !this.options.selfListen
+                ) {
+                  continue
+                }
 
                 for (const callback of this._listenFns) {
                   callback(delta)
