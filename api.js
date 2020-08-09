@@ -110,4 +110,21 @@ module.exports = class {
 
     return () => this.stopListen(callback)
   }
+
+  async changeGroupPhoto (groupTarget, image) {
+    // document.querySelector('input[type=file][aria-label="Change Group Photo"]')
+  }
+
+  async sendImage (target, imagePathOrImagePaths) {
+    if (!imagePathOrImagePaths) return
+
+    const images = Array.isArray(imagePathOrImagePaths) ? imagePathOrImagePaths : Array(imagePathOrImagePaths)
+    const uploadBtn = await this.page.$('input[type=file][title="Add Files"]')
+
+    for (const imagePath of images) {
+      await uploadBtn.uploadFile(imagePath)
+    }
+
+    await this.page.keyboard.press('Enter')
+  }
 }
