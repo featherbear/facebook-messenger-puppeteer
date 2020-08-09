@@ -36,7 +36,6 @@ module.exports = class {
       await navigationPromise
     }
 
-    // TODO: Now check for successful login
     emailField = await page.$('[name=email]')
     passwordField = await page.$('[name=pass]')
     submitButton = await page.$('#loginbutton')

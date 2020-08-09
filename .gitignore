@@ -1,2 +1,4 @@
+.appstate.json
 node_modules/
-/ignore/
+*.ignore
+
