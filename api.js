@@ -6,6 +6,7 @@ module.exports = class {
     this.browser = null
     this.page = null
     this._listenFns = {}
+    this._aliasMap = {}
   }
 
   async getSession () {
@@ -46,11 +47,21 @@ module.exports = class {
   }
 
   async _setTarget (target) {
-    const targetURL = `https://www.messenger.com/t/${target}`
-    if (this.page.url() != targetURL) {
-      return this.page.goto(targetURL, { waitUntil: 'networkidle2' })
+    const threadPrefix = 'https://www.messenger.com/t/'
+    let slug = this.page.url().substr(threadPrefix.length)
+
+    if (target == slug || target == this._aliasMap[slug]) {
+      return null
     }
-    return null
+
+    const response = await this.page.goto(`${threadPrefix}${target}`, {
+      waitUntil: 'networkidle2'
+    })
+    
+    slug = this.page.url().substr(threadPrefix.length)
+    this._aliasMap[slug] = target
+
+    return response
   }
 
   async sendMessage (target, data) {
