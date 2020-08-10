@@ -177,6 +177,10 @@ module.exports = class {
     await this.page.keyboard.press('Enter')
   }
 
+  async sendFile (target, filePathOrFilePaths) {
+    return this.sendImage(target, filePathOrFilePaths)
+  }
+
   async sendImage (target, imagePathOrImagePaths) {
     await this._setTarget(target)
 
