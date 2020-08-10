@@ -163,8 +163,12 @@ module.exports = class {
     return () => this._stopListen(callback)
   }
 
-  async changeGroupPhoto (groupTarget, image) {
-    // document.querySelector('input[type=file][aria-label="Change Group Photo"]')
+  async changeGroupPhoto (groupTarget, imagePath) {
+    await this._setTarget(groupTarget)
+    const uploadBtn = await this.page.$('input[type=file][aria-label="Change Group Photo"]')
+    await uploadBtn.uploadFile(imagePath)
+  }
+
   async changeGroupName (groupTarget, name) {
     await this._setTarget(groupTarget)
     const nameElem = await this.page.$('[role=textbox] div div div')
