@@ -3,7 +3,10 @@ const atob = require('atob')
 
 module.exports = class {
   constructor (options) {
-    this.options = options || {}
+    this.options = options || {
+      session: null,
+      selfListen: false
+    }
     this.browser = null
     this.page = null
     this._listenFns = null // begin as null, change to []
@@ -15,15 +18,15 @@ module.exports = class {
     return this.page.cookies()
   }
 
-  async login ({ email, password, session }) {
+  async login (email, password) {
     console.log('Logging in...')
     const browser = (this.browser = await puppeteer.launch({
       headless: !process.env.DEBUG
     }))
     const page = (this.page = (await browser.pages())[0]) // await browser.newPage())
 
-    if (session) {
-      await page.setCookie(...session)
+    if (this.options.session) {
+      await page.setCookie(...this.options.session)
     }
 
     await page.goto('https://messenger.com', { waitUntil: 'networkidle2' })
@@ -42,6 +45,7 @@ module.exports = class {
       await navigationPromise
     }
 
+    // Check if we still haven't logged in
     emailField = await page.$('[name=email]')
     passwordField = await page.$('[name=pass]')
     submitButton = await page.$('#loginbutton')
@@ -165,7 +169,9 @@ module.exports = class {
 
   async changeGroupPhoto (groupTarget, imagePath) {
     await this._setTarget(groupTarget)
-    const uploadBtn = await this.page.$('input[type=file][aria-label="Change Group Photo"]')
+    const uploadBtn = await this.page.$(
+      'input[type=file][aria-label="Change Group Photo"]'
+    )
     await uploadBtn.uploadFile(imagePath)
   }
 
@@ -198,3 +204,12 @@ module.exports = class {
     await this.page.keyboard.press('Enter')
   }
 }
+
+// leave site force yes
+
+/*
+So either i drop the previous request
+or i make it a queue
+and finish one at a time
+or i could make it scale and do multiple
+*/
