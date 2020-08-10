@@ -108,7 +108,7 @@ module.exports = class {
   }
 
   listen (callback) {
-    return this.listenRaw(json => {
+    return this.listenRaw(async json => {
       const data = {
         body: json.body,
         thread: Object.values(json.messageMetadata.threadKey)[0],
@@ -118,7 +118,7 @@ module.exports = class {
         attachments: json.attachments
       }
 
-      callback(data)
+      await callback(data)
     })
   }
 
@@ -128,7 +128,7 @@ module.exports = class {
 
       this.page._client.on(
         'Network.webSocketFrameReceived',
-        ({ timestamp, response: { payloadData } }) => {
+        async ({ timestamp, response: { payloadData } }) => {
           if (payloadData.length > 16) {
             try {
               // :shrug:
@@ -144,7 +144,7 @@ module.exports = class {
                 }
 
                 for (const callback of this._listenFns) {
-                  callback(delta)
+                  await callback(delta)
                 }
               }
             } catch (e) {
