@@ -174,6 +174,8 @@ module.exports = class {
   }
 
   async sendImage (target, imagePathOrImagePaths) {
+    await this._setTarget(target)
+
     if (!imagePathOrImagePaths) return
 
     const images = Array.isArray(imagePathOrImagePaths)
