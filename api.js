@@ -165,6 +165,12 @@ module.exports = class {
 
   async changeGroupPhoto (groupTarget, image) {
     // document.querySelector('input[type=file][aria-label="Change Group Photo"]')
+  async changeGroupName (groupTarget, name) {
+    await this._setTarget(groupTarget)
+    const nameElem = await this.page.$('[role=textbox] div div div')
+    await nameElem.click()
+    await nameElem.type(name)
+    await this.page.keyboard.press('Enter')
   }
 
   async sendImage (target, imagePathOrImagePaths) {
