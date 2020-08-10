@@ -98,7 +98,15 @@ module.exports = class {
     await this._setTarget(target)
     const inputElem = await this.page.$('[aria-label^="Type a message"]')
 
-    await inputElem.type(data)
+    for (const char of data) {
+      if (char === '\n') {
+        await this.page.keyboard.down('Shift')
+        await this.page.keyboard.press('Enter')
+        await this.page.keyboard.up('Shift')
+        continue
+      }
+      await inputElem.type(char)
+    }
     await this.page.keyboard.press('Enter')
   }
 
