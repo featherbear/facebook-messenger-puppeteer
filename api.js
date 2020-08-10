@@ -79,7 +79,7 @@ module.exports = class {
     }
 
     const response = await this.page.goto(`${threadPrefix}${target}`, {
-      waitUntil: 'domcontentloaded'
+      waitUntil: 'networkidle2'
     })
 
     slug = this.page.url().substr(threadPrefix.length)
