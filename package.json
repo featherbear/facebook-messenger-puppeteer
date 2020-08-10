@@ -1,6 +1,6 @@
 {
   "name": "facebook-messenger-puppeteer",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Messenger Chat API via Puppeteer",
   "main": "api.js",
   "repository": {

@@ -129,7 +129,7 @@ module.exports = class {
   listen (callback) {
     return this.listenRaw(async json => {
       const data = {
-        body: json.body,
+        body: json.body || '',
         thread: Object.values(json.messageMetadata.threadKey)[0],
         sender: json.messageMetadata.actorFbId,
         timestamp: json.messageMetadata.timestamp,
@@ -222,12 +222,3 @@ module.exports = class {
     await this.page.keyboard.press('Enter')
   }
 }
-
-// leave site force yes
-
-/*
-So either i drop the previous request
-or i make it a queue
-and finish one at a time
-or i could make it scale and do multiple
-*/
