@@ -1,6 +1,6 @@
 {
   "name": "facebook-messenger-puppeteer",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Messenger Chat API via Puppeteer",
   "main": "api.js",
   "repository": {
@@ -15,6 +15,7 @@
   "homepage": "https://github.com/featherbear/facebook-messenger-puppeteer#readme",
   "dependencies": {
     "atob": "^2.1.2",
-    "puppeteer": "^5.2.1"
+    "puppeteer": "^5.2.1",
+    "queue": "^6.0.1"
   }
 }

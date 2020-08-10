@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer')
 const atob = require('atob')
+const queue = require('queue')
 
 module.exports = class {
   constructor (options) {
@@ -12,6 +13,12 @@ module.exports = class {
     this._listenFns = null // begin as null, change to []
     this._aliasMap = {}
     this.uid = null // string
+
+    this._messageQueue = queue({
+      autostart: true,
+      concurrency: 1,
+      timeout: 1000
+    })
   }
 
   async getSession () {
@@ -148,7 +155,10 @@ module.exports = class {
                 }
 
                 for (const callback of this._listenFns) {
-                  await callback(delta)
+                  this._messageQueue.push(async cb => {
+                    await callback(delta)
+                    cb()
+                  })
                 }
               }
             } catch (e) {
