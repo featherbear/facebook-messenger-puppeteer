@@ -24,13 +24,12 @@ npm install featherbear/facebook-messenger-puppeteer
 
 ```
 const Client = require('facebook-messenger-puppeteer')
-
-const api = Client()
 ```
 
 * `Client( {...opts} )`
   * `selfListen` - `bool` - default: `false`
   * `session` - `Array[CookieObj]`
+  * `workerLimit` - `int` - default: `3`
 * `.getSession()`
 * `.login(email, password)`
 * `.sendMessage(target, data)`
