@@ -53,6 +53,7 @@ module.exports = class {
     }
 
     // Check if we still haven't logged in
+    // TODO:
     emailField = await page.$('[name=email]')
     passwordField = await page.$('[name=pass]')
     submitButton = await page.$('#loginbutton')
@@ -64,6 +65,21 @@ module.exports = class {
     this.uid = (await this.getSession()).find(
       cookie => cookie.name === 'c_user'
     ).value
+
+    page._client.on(
+      'Network.webSocketFrameReceived',
+      async ({ timestamp, response: { payloadData } }) => {
+        try {
+          if (JSON.parse(atob(payloadData.substr(20))).type === 'rtc_multi_json') {
+            setTimeout(async () => {
+              try {
+                const cancelBtn = await page.$('[data-testid=ignoreCallButton]')
+                await cancelBtn.click()
+              } catch {}
+            }, 100)
+          }
+        } catch {}
+      })
 
     console.log(`Logged in as ${this.uid}`)
   }
