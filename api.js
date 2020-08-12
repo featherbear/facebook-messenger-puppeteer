@@ -44,7 +44,7 @@ module.exports = class {
   }
 
   async _delegate (thread, fn) {
-    console.log('Received function ', fn, thread)
+    console.debug('Received function ', fn, thread)
     if (!thread) throw new Error('No thread target')
     thread = thread.toString()
 
@@ -54,10 +54,10 @@ module.exports = class {
     })
 
     const pushQueue = (workerObj, fn) => {
-      console.log('Pushing function to worker thread', workerObj.id)
+      console.debug('Pushing function to worker thread', workerObj.id)
 
       workerObj.queue.push(async finish => {
-        console.log('Executing function (finally)')
+        console.debug('Executing function (finally)')
         workerObj.active = true
         workerObj.lastActivity = new Date()
         _resolve(await fn.apply(workerObj.page))
@@ -66,7 +66,7 @@ module.exports = class {
     }
 
     const replaceWorker = async (workerObj, newThread, hookFn) => {
-      console.log('Replacing worker thread queue', workerObj.id)
+      console.debug('Replacing worker thread queue', workerObj.id)
       workerObj.thread = null
       workerObj.queue.autostart = false
 
@@ -83,11 +83,11 @@ module.exports = class {
     )
 
     if (target) {
-      console.log('Existing worker thread found, pushing')
+      console.debug('Existing worker thread found, pushing')
       // Push new action to target worker queue
       pushQueue(target, fn)
     } else {
-      console.log('Target worker thread not found')
+      console.debug('Target worker thread not found')
       // Queue new action if there are no free workers
       if (this._workerPages.length >= this.options.workerLimit) {
         const freeTarget = this._workerPages
@@ -99,18 +99,18 @@ module.exports = class {
             pushQueue(freeTarget, fn)
           )
         } else {
-          console.log('Reached worker thread capacity')
+          console.debug('Reached worker thread capacity')
           if (thread in this._actionQueueOutgoing) {
-            console.log('Adding function to existing queue')
+            console.debug('Adding function to existing queue')
             this._actionQueueOutgoing[thread].push(fn)
           } else {
-            console.log('Creating new function queue')
+            console.debug('Creating new function queue')
             this._actionQueueOutgoing[thread] = [fn]
             this._actionQueueOutgoing[Order].push(thread)
           }
         }
       } else {
-        console.log('Spawning new worker')
+        console.debug('Spawning new worker')
         // Create a new worker if there is an empty worker slot
         const target = {
           thread,
@@ -133,7 +133,7 @@ module.exports = class {
 
         // Handle worker replacement
         target.queue.on('end', async () => {
-          console.log('Worker finished tasks')
+          console.debug('Worker finished tasks')
           target.active = false
           const next = this._actionQueueOutgoing[Order].shift()
           if (!next) return
@@ -330,7 +330,7 @@ module.exports = class {
               }
             } catch (e) {
               // * cries silently *
-              //   console.log(atob(payloadData.substr(16)))
+              //   console.debug(atob(payloadData.substr(16)))
             }
           }
         }
