@@ -300,6 +300,30 @@ module.exports = class {
     })
   }
 
+  async test (stream) {
+    stream = Buffer.from(stream, 'base64')
+
+    if (stream[0] !== 0x33) return
+
+    const code = stream[0] >> 4
+    // if (code !== 3) {
+    //   console.error('Not p.PUBLISH')
+    //   return
+    // }
+    let idx = 0
+    while (stream[++idx] & 128 !== 0) continue
+
+    let topicLength = 256 * stream[idx++] + stream[idx++]
+    if (stream[idx] !== 0x2f) {
+      topicLength = 256 * stream[idx++] + stream[idx++]
+    }
+
+    console.log({
+      topic: stream.subarray(idx, idx + topicLength).toString(),
+      payload: JSON.parse(stream.subarray((((code & 15) >> 1 & 3) === 1 ? 2 : 0) + idx + topicLength))
+    })
+  }
+
   listenRaw (callback) {
     if (this._listenFns === null) {
       this._listenFns = []
@@ -307,6 +331,8 @@ module.exports = class {
       this._masterPage._client.on(
         'Network.webSocketFrameReceived',
         async ({ timestamp, response: { payloadData } }) => {
+          this.test(payloadData)
+
           if (payloadData.length > 16) {
             try {
               // :shrug:
