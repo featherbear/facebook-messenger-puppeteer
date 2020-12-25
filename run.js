@@ -13,7 +13,7 @@ credentials.session = fs.existsSync(path.join(__dirname, '.appstate.json'))
 const api = new Client()
 
 ;(async () => {
-  await api.login(credentials)
+  await api.login(credentials.email, credentials.password)
 
   // Save current cookie
   fs.writeFileSync(

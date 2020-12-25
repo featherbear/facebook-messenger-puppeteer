@@ -179,9 +179,8 @@ module.exports = class {
       // Looks like we're unauthenticated
       await emailField.type(email)
       await passwordField.type(password)
-
       const navigationPromise = page.waitForNavigation()
-      await submitButton.click()
+      page.$eval('#loginbutton', elem => elem.click());
       await navigationPromise
     }
 
