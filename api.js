@@ -169,38 +169,55 @@ module.exports = class {
       await page.setCookie(...this.options.session)
     }
 
-    await page.goto('https://messenger.com', { waitUntil: 'networkidle2' })
+    // await page.setUserAgent("Mozilla/5.0 (Android 7.0; Mobile; rv:54.0) Gecko/54.0 Firefox/54.0")
 
-    let emailField = await page.$('[name=email]')
-    let passwordField = await page.$('[name=pass]')
-    let submitButton = await page.$('#loginbutton')
+    // Go to the login page
+    await page.goto('https://m.facebook.com/login.php', { waitUntil: 'networkidle2' })
 
-    if (emailField && passwordField && submitButton) {
+    await (async function (cb, ...items) {
+      return Promise.all(items.map(q => page.$(q))).then(r=>cb(...r))
+    })(async (emailField, passwordField, submitButton) => {
       // Looks like we're unauthenticated
       await emailField.type(email)
       await passwordField.type(password)
-      const navigationPromise = page.waitForNavigation()
-      page.$eval('#loginbutton', elem => elem.click());
+      let navigationPromise = page.waitForNavigation()
+      page.$eval('button[name=login]', elem => elem.click());
       await navigationPromise
-    }
 
-    // Check if we still haven't logged in
-    // TODO: Check page.url() for (un)successful login
-    emailField = await page.$('[name=email]')
-    passwordField = await page.$('[name=pass]')
-    submitButton = await page.$('#loginbutton')
+      await page.goto('https://m.facebook.com/messages', { waitUntil: 'networkidle2' })
 
-    if (emailField || passwordField || submitButton) {
-      throw new Error('Bad credentials')
-    }
+      // // don't need to handle, just navigate away
+      // if (page.url().startsWith("https://m.facebook.com/login/save-device/")) {
+      //   console.log('yea');
+      //   navigationPromise = page.waitForNavigation()
+      //   page.$('a[href^="/login/save-device/cancel/"]', elem => elem.click());
+      //   await navigationPromise
+      // } else {
+      //   console.log('nup');
+      // }
+
+    }, 'input[name=email]', 'input[name=pass]', 'button[name=login]')
+
+    // TODO: Handle bad login
+    // console.log(page.url());
+    // // Check if we still haven't logged in
+    // // TODO: Check page.url() for (un)successful login
+    // emailField = await page.$('[name=email]')
+    // passwordField = await page.$('[name=pass]')
+    // submitButton = await page.$('#loginbutton')
+
+    // if (emailField || passwordField || submitButton) {
+    //   throw new Error('Bad credentials')
+    // }
 
     this.uid = (await this.getSession()).find(
       cookie => cookie.name === 'c_user'
     ).value
 
-    await page.goto(`https://messenger.com/t/${this.uid}`, {
-      waitUntil: 'networkidle2'
-    })
+      console.log('get id', this.uid);
+    // await page.goto(`https://messenger.com/t/${this.uid}`, {
+    //   waitUntil: 'networkidle2'
+    // })
 
     // Deny audio and video calls
     page._client.on(
@@ -228,7 +245,7 @@ module.exports = class {
   async _setTarget (page, target) {
     target = target.toString()
 
-    const threadPrefix = 'https://www.messenger.com/t/'
+    const threadPrefix = 'https://m.facebook.com/messages/read/?tid='
     let slug = page.url().substr(threadPrefix.length)
 
     if (target === this.threadHandleToID(slug)) {
@@ -253,18 +270,19 @@ module.exports = class {
     }
 
     this._delegate(target, async function () {
-      const inputElem = await this.$('[aria-label^="Type a message"]')
+      // await this.$eval('[placeholder="Write a message..."]', (el, value) => el.value = value, data)
+
+      const inputElem = await this.$('[placeholder="Write a message..."]')
 
       for (const char of data) {
         if (char === '\n') {
-          await this.keyboard.down('Shift')
           await this.keyboard.press('Enter')
-          await this.keyboard.up('Shift')
           continue
         }
         await inputElem.type(char)
       }
-      await this.keyboard.press('Enter')
+      // .click()
+      await this.$eval('button[name=send]', elem => elem.click());
     })
   }
 
@@ -309,7 +327,9 @@ module.exports = class {
           if (payloadData.length > 16) {
             try {
               // :shrug:
+              console.log(atob(payloadData), "\n\n\n")
               const json = JSON.parse(atob(payloadData.substr(16)))
+              
 
               for (const delta of json.deltas) {
                 if (delta.class !== 'NewMessage') continue
@@ -328,7 +348,7 @@ module.exports = class {
                 }
               }
             } catch (e) {
-              // * cries silently *
+              // * screams in void *
               //   console.debug(atob(payloadData.substr(16)))
             }
           }

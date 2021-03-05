@@ -29,6 +29,9 @@ const api = new Client()
     // json.messageMetadata.messageId
     // json.messageMetadata.timestamp
 
-    console.log(json)
+    console.log("LISTEN RESP", json)
+    if (json.body=="yes") {
+      api.sendMessage(json.thread, "yup")
+    }
   })
 })()
