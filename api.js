@@ -249,18 +249,9 @@ module.exports = class {
     }
 
     this._delegate(target, async function () {
-      // await this.$eval('[placeholder="Write a message..."]', (el, value) => el.value = value, data)
-
       const inputElem = await this.$('[placeholder="Write a message..."]')
 
-      for (const char of data) {
-        if (char === '\n') {
-          await this.keyboard.press('Enter')
-          continue
-        }
-        await inputElem.type(char)
-      }
-      // .click()
+      await inputElem.type(data)
       await this.$eval('button[name=send]', elem => elem.click());
     })
   }
