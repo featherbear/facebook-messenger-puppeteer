@@ -214,7 +214,6 @@ module.exports = class {
       cookie => cookie.name === 'c_user'
     ).value
 
-      console.log('get id', this.uid);
     // await page.goto(`https://messenger.com/t/${this.uid}`, {
     //   waitUntil: 'networkidle2'
     // })
