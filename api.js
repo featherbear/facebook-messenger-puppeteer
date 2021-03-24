@@ -336,17 +336,19 @@ module.exports = class {
   async sendImage (target, imagePathOrImagePaths) {
     if (!imagePathOrImagePaths) return
 
+    const images = Array.isArray(imagePathOrImagePaths)
+      ? imagePathOrImagePaths
+      : Array(imagePathOrImagePaths)
+
     return this._delegate(target, async function () {
-      const images = Array.isArray(imagePathOrImagePaths)
-        ? imagePathOrImagePaths
-        : Array(imagePathOrImagePaths)
-      const uploadBtn = await this.$('input[type=file][title="Add Files"]')
 
       for (const imagePath of images) {
+        let uploadBtn = await this.$('input[type=file][data-sigil="m-raw-file-input"]')
         await uploadBtn.uploadFile(imagePath)
       }
 
-      await this.keyboard.press('Enter')
+      await this.waitForSelector('button[name=send]:not([disabled])')
+      await this.$eval('button[name=send]', elem => elem.click())
     })
   }
 }
