@@ -218,26 +218,6 @@ module.exports = class {
     //   waitUntil: 'networkidle2'
     // })
 
-    // Deny audio and video calls
-    page._client.on(
-      'Network.webSocketFrameReceived',
-      async ({ timestamp, response: { payloadData } }) => {
-        if (payloadData.length < 20) return
-        try {
-          if (
-            JSON.parse(atob(payloadData.substr(20))).type === 'rtc_multi_json'
-          ) {
-            setTimeout(async () => {
-              try {
-                const cancelBtn = await page.$('[data-testid=ignoreCallButton]')
-                await cancelBtn.click()
-              } catch {}
-            }, 100)
-          }
-        } catch {}
-      }
-    )
-
     console.log(`Logged in as ${this.uid}`)
   }
 
