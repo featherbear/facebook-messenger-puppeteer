@@ -299,7 +299,7 @@ module.exports = class {
           if (payloadData.length > 16) {
             try {
               // :shrug:
-              console.log(atob(payloadData), "\n\n\n")
+              // console.log(atob(payloadData), "\n\n\n")
               const json = JSON.parse(atob(payloadData.substr(16)))
               
 
