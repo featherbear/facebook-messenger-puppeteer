@@ -174,30 +174,32 @@ module.exports = class {
     // Go to the login page
     await page.goto('https://m.facebook.com/login.php', { waitUntil: 'networkidle2' })
 
-    await (async function (cb, ...items) {
-      return Promise.all(items.map(q => page.$(q))).then(r=>cb(...r))
-    })(async (emailField, passwordField, submitButton) => {
-      // Looks like we're unauthenticated
-      await emailField.type(email)
-      await passwordField.type(password)
-      let navigationPromise = page.waitForNavigation()
-      page.$eval('button[name=login]', elem => elem.click());
-      await navigationPromise
+    // If there's a session (from cookie), then skip login
+    if (page.url().startsWith('https://m.facebook.com/login.php')) {
+      await (async function (cb, ...items) {
+        return Promise.all(items.map(q => page.$(q))).then(r=>cb(...r))
+      })(async (emailField, passwordField, submitButton) => {
+        // Looks like we're unauthenticated
+        await emailField.type(email)
+        await passwordField.type(password)
+        let navigationPromise = page.waitForNavigation()
+        page.$eval('button[name=login]', elem => elem.click());
+        await navigationPromise
 
-      await page.goto('https://m.facebook.com/messages', { waitUntil: 'networkidle2' })
+        await page.goto('https://m.facebook.com/messages', { waitUntil: 'networkidle2' })
 
-      // // don't need to handle, just navigate away
-      // if (page.url().startsWith("https://m.facebook.com/login/save-device/")) {
-      //   console.log('yea');
-      //   navigationPromise = page.waitForNavigation()
-      //   page.$('a[href^="/login/save-device/cancel/"]', elem => elem.click());
-      //   await navigationPromise
-      // } else {
-      //   console.log('nup');
-      // }
+        // // don't need to handle, just navigate away
+        // if (page.url().startsWith("https://m.facebook.com/login/save-device/")) {
+        //   console.log('yea');
+        //   navigationPromise = page.waitForNavigation()
+        //   page.$('a[href^="/login/save-device/cancel/"]', elem => elem.click());
+        //   await navigationPromise
+        // } else {
+        //   console.log('nup');
+        // }
 
-    }, 'input[name=email]', 'input[name=pass]', 'button[name=login]')
-
+      }, 'input[name=email]', 'input[name=pass]', 'button[name=login]')
+    }
     // TODO: Handle bad login
     // console.log(page.url());
     // // Check if we still haven't logged in
