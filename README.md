@@ -35,9 +35,6 @@ const Client = require('facebook-messenger-puppeteer')
 * `.sendMessage(target, data)`
 * `.listen(callback)`
 * `.listenRaw(callback)`
-* `.changeGroupPhoto(groupTarget, imagePath)`
-* `.changeGroupName(groupTarget, name)`
-* `.sendFile(target, filePathOrFilePaths)`
 * `.sendImage(target, imagePathOrImagePaths)`
 
 # References

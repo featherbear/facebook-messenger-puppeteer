@@ -13,7 +13,7 @@ credentials.session = fs.existsSync(path.join(__dirname, '.appstate.json'))
 const api = new Client()
 
 ;(async () => {
-  await api.login(credentials)
+  await api.login(credentials.email, credentials.password)
 
   // Save current cookie
   fs.writeFileSync(
@@ -29,6 +29,9 @@ const api = new Client()
     // json.messageMetadata.messageId
     // json.messageMetadata.timestamp
 
-    console.log(json)
+    console.log("LISTEN RESP", json)
+    if (json.body=="yes") {
+      api.sendMessage(json.thread, "yup")
+    }
   })
 })()
