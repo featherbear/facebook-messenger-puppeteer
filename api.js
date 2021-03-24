@@ -333,28 +333,6 @@ module.exports = class {
     return () => this._stopListen(callback)
   }
 
-  async changeGroupPhoto (groupTarget, imagePath) {
-    return this._delegate(groupTarget, async function () {
-      const uploadBtn = await this.$(
-        'input[type=file][aria-label="Change Group Photo"]'
-      )
-      await uploadBtn.uploadFile(imagePath)
-    })
-  }
-
-  async changeGroupName (groupTarget, name) {
-    return this._delegate(groupTarget, async function () {
-      const nameElem = await this.$('[role=textbox] div div div')
-      await nameElem.click()
-      await nameElem.type(name)
-      await this.keyboard.press('Enter')
-    })
-  }
-
-  async sendFile (target, filePathOrFilePaths) {
-    return this.sendImage(target, filePathOrFilePaths)
-  }
-
   async sendImage (target, imagePathOrImagePaths) {
     if (!imagePathOrImagePaths) return
 
