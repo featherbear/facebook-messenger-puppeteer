@@ -358,4 +358,8 @@ module.exports = class {
       await this.$eval('button[name=send]', elem => elem.click())
     })
   }
+
+  async close() {
+    return this._browser.close()
+  }
 }
