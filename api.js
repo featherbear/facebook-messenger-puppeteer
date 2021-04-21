@@ -223,7 +223,7 @@ module.exports = class {
     console.log(`Logged in as ${this.uid}`)
   }
 
-  getUID() {
+  getCurrentUserID() {
     /* String */
     return this.uid
   }

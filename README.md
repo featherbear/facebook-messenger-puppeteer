@@ -31,7 +31,7 @@ const Client = require('facebook-messenger-puppeteer')
   * `session` - `Array[CookieObj]`
   * `workerLimit` - `int` - default: `3`
 * `.getSession()`
-* `.getUID()` - `string`
+* `.getCurrentUserID()` - `string`
 * `.login(email, password)`
 * `.sendMessage(target, data)`
 * `.listen(callback)`
