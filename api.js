@@ -223,6 +223,11 @@ module.exports = class {
     console.log(`Logged in as ${this.uid}`)
   }
 
+  getUID() {
+    /* String */
+    return this.uid
+  }
+
   async _setTarget (page, target) {
     target = target.toString()
 
