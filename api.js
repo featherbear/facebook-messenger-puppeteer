@@ -10,6 +10,7 @@ module.exports = class {
       session: null,
       selfListen: false,
       workerLimit: 3,
+      debug: false,
       ...(options || {})
     }
     this._browser = null // Puppeteer instance
@@ -159,71 +160,79 @@ module.exports = class {
   }
 
   async login (email, password) {
-    console.log('Logging in...')
-    const browser = (this._browser = await puppeteer.launch({
-      headless: !process.env.DEBUG
-    }))
-    const page = (this._masterPage = (await browser.pages())[0]) // await browser.newPage())
+    return new Promise(async (resolve, reject) => {
+      this.options.debug && console.log('Logging in...')
 
-    if (this.options.session) {
-      await page.setCookie(...this.options.session)
-    }
+      const browser = (this._browser = await puppeteer.launch({
+        headless: !this.options.debug
+      }))
+      const page = (this._masterPage = (await browser.pages())[0]) // await browser.newPage())
 
-    // await page.setUserAgent("Mozilla/5.0 (Android 7.0; Mobile; rv:54.0) Gecko/54.0 Firefox/54.0")
+      if (this.options.session) {
+        await page.setCookie(...this.options.session)
+      }
 
-    // Go to the login page
-    await page.goto('https://m.facebook.com/login.php', { waitUntil: 'networkidle2' })
+      // await page.setUserAgent("Mozilla/5.0 (Android 7.0; Mobile; rv:54.0) Gecko/54.0 Firefox/54.0")
 
-    // If there's a session (from cookie), then skip login
-    if (page.url().startsWith('https://m.facebook.com/login.php')) {
-      await (async function (cb, ...items) {
-        return Promise.all(items.map(q => page.$(q))).then(r=>cb(...r))
-      })(async (emailField, passwordField, submitButton) => {
-        // Looks like we're unauthenticated
-        await emailField.type(email)
-        await passwordField.type(password)
-        let navigationPromise = page.waitForNavigation()
-        page.$eval('button[name=login]', elem => elem.click());
-        await navigationPromise
+      // Go to the login page
+      await page.goto('https://m.facebook.com/login.php', {
+        waitUntil: 'networkidle2'
+      })
 
-        await page.goto('https://m.facebook.com/messages', { waitUntil: 'networkidle2' })
+      // If there's a session (from cookie), then skip login
+      let authFail = false
+      if (page.url().startsWith('https://m.facebook.com/login.php')) {
+        await (async (cb, ...items) =>
+          Promise.all(items.map(q => page.$(q))).then(r => cb(...r)))(
+          async (emailField, passwordField, submitButton) => {
+            // Looks like we're unauthenticated
+            await emailField.type(email)
+            await passwordField.type(password)
+            let navigationPromise = page.waitForNavigation()
+            page.$eval('button[name=login]', elem => elem.click())
 
-        // // don't need to handle, just navigate away
-        // if (page.url().startsWith("https://m.facebook.com/login/save-device/")) {
-        //   console.log('yea');
-        //   navigationPromise = page.waitForNavigation()
-        //   page.$('a[href^="/login/save-device/cancel/"]', elem => elem.click());
-        //   await navigationPromise
-        // } else {
-        //   console.log('nup');
-        // }
+            setTimeout(async () => {
+              if (
+                page.url().startsWith('https://m.facebook.com/login.php') &&
+                (await Promise.all(
+                  [
+                    '//div[contains(text(), "find account")]',
+                    '//div[contains(text(), "Need help with finding your account?")]',
+                    '//div[contains(text(), "The password that you entered is incorrect")]',
+                    '//div[contains(text(), "Incorrect password")]'
+                  ].map(xPath => page.$x(xPath))
+                ).then(r => r.flat().length > 0))
+              ) {
+                authFail = true
+                await this.close()
+                reject(new Error('Bad credentials'))
+              }
+            }, 3000)
 
-      }, 'input[name=email]', 'input[name=pass]', 'button[name=login]')
-    }
-    // TODO: Handle bad login
-    // console.log(page.url());
-    // // Check if we still haven't logged in
-    // // TODO: Check page.url() for (un)successful login
-    // emailField = await page.$('[name=email]')
-    // passwordField = await page.$('[name=pass]')
-    // submitButton = await page.$('#loginbutton')
+            await navigationPromise.catch(() => {})
+          },
+          'input[name=email]',
+          'input[name=pass]',
+          'button[name=login]'
+        )
+      }
 
-    // if (emailField || passwordField || submitButton) {
-    //   throw new Error('Bad credentials')
-    // }
+      if (!authFail) {
+        await page.goto('https://m.facebook.com/messages', {
+          waitUntil: 'networkidle2'
+        })
 
-    this.uid = (await this.getSession()).find(
-      cookie => cookie.name === 'c_user'
-    ).value
+        this.uid = (await this.getSession()).find(
+          cookie => cookie.name === 'c_user'
+        ).value
 
-    // await page.goto(`https://messenger.com/t/${this.uid}`, {
-    //   waitUntil: 'networkidle2'
-    // })
-
-    console.log(`Logged in as ${this.uid}`)
+        this.options.debug && console.log(`Logged in as ${this.uid}`)
+        resolve(this)
+      }
+    })
   }
 
-  getCurrentUserID() {
+  getCurrentUserID () {
     /* String */
     return this.uid
   }
@@ -259,7 +268,7 @@ module.exports = class {
       const inputElem = await this.$('[placeholder="Write a message..."]')
 
       await inputElem.type(data)
-      await this.$eval('button[name=send]', elem => elem.click());
+      await this.$eval('button[name=send]', elem => elem.click())
     })
   }
 
@@ -306,7 +315,6 @@ module.exports = class {
               // :shrug:
               // console.log(atob(payloadData), "\n\n\n")
               const json = JSON.parse(atob(payloadData.substr(16)))
-              
 
               for (const delta of json.deltas) {
                 if (delta.class !== 'NewMessage') continue
@@ -348,9 +356,10 @@ module.exports = class {
       : Array(imagePathOrImagePaths)
 
     return this._delegate(target, async function () {
-
       for (const imagePath of images) {
-        let uploadBtn = await this.$('input[type=file][data-sigil="m-raw-file-input"]')
+        let uploadBtn = await this.$(
+          'input[type=file][data-sigil="m-raw-file-input"]'
+        )
         await uploadBtn.uploadFile(imagePath)
       }
 
@@ -359,7 +368,7 @@ module.exports = class {
     })
   }
 
-  async close() {
+  async close () {
     return this._browser.close()
   }
 }
