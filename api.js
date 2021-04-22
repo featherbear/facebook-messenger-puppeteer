@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer')
 const atob = require('atob')
 const Queue = require('queue')
-
+const mqttParser = require('mqtt-packet').parser
 const Order = Symbol('Order')
 
 module.exports = class {
@@ -45,7 +45,7 @@ module.exports = class {
   }
 
   async _delegate (thread, fn) {
-    console.debug('Received function ', fn, thread)
+    this.options.debug && console.debug('Received function ', fn, thread)
     if (!thread) throw new Error('No thread target')
     thread = thread.toString()
 
@@ -55,10 +55,10 @@ module.exports = class {
     })
 
     const pushQueue = (workerObj, fn) => {
-      console.debug('Pushing function to worker thread', workerObj.id)
+      this.options.debug && console.debug('Pushing function to worker thread', workerObj.id)
 
       workerObj.queue.push(async finish => {
-        console.debug('Executing function (finally)')
+        this.options.debug && console.debug('Executing function (finally)')
         workerObj.active = true
         workerObj.lastActivity = new Date()
         _resolve(await fn.apply(workerObj.page))
@@ -67,7 +67,7 @@ module.exports = class {
     }
 
     const replaceWorker = async (workerObj, newThread, hookFn) => {
-      console.debug('Replacing worker thread queue', workerObj.id)
+      this.options.debug && console.debug('Replacing worker thread queue', workerObj.id)
       workerObj.thread = null
       workerObj.queue.autostart = false
 
@@ -84,11 +84,11 @@ module.exports = class {
     )
 
     if (target) {
-      console.debug('Existing worker thread found, pushing')
+      this.options.debug && console.debug('Existing worker thread found, pushing')
       // Push new action to target worker queue
       pushQueue(target, fn)
     } else {
-      console.debug('Target worker thread not found')
+      this.options.debug && console.debug('Target worker thread not found')
       // Queue new action if there are no free workers
       if (this._workerPages.length >= this.options.workerLimit) {
         const freeTarget = this._workerPages
@@ -100,18 +100,18 @@ module.exports = class {
             pushQueue(freeTarget, fn)
           )
         } else {
-          console.debug('Reached worker thread capacity')
+          this.options.debug && console.debug('Reached worker thread capacity')
           if (thread in this._actionQueueOutgoing) {
-            console.debug('Adding function to existing queue')
+            this.options.debug && console.debug('Adding function to existing queue')
             this._actionQueueOutgoing[thread].push(fn)
           } else {
-            console.debug('Creating new function queue')
+            this.options.debug && console.debug('Creating new function queue')
             this._actionQueueOutgoing[thread] = [fn]
             this._actionQueueOutgoing[Order].push(thread)
           }
         }
       } else {
-        console.debug('Spawning new worker')
+        this.options.debug && console.debug('Spawning new worker')
         // Create a new worker if there is an empty worker slot
         const target = {
           thread,
@@ -134,7 +134,7 @@ module.exports = class {
 
         // Handle worker replacement
         target.queue.on('end', async () => {
-          console.debug('Worker finished tasks')
+          this.options.debug && console.debug('Worker finished tasks')
           target.active = false
           const next = this._actionQueueOutgoing[Order].shift()
           if (!next) return
@@ -222,6 +222,7 @@ module.exports = class {
           waitUntil: 'networkidle2'
         })
 
+        // String
         this.uid = (await this.getSession()).find(
           cookie => cookie.name === 'c_user'
         ).value
@@ -292,8 +293,8 @@ module.exports = class {
     return this.listenRaw(async json => {
       const data = {
         body: json.body || '',
-        thread: Object.values(json.messageMetadata.threadKey)[0],
-        sender: json.messageMetadata.actorFbId,
+        thread: Number(Object.values(json.messageMetadata.threadKey)[0]),
+        sender: Number(json.messageMetadata.actorFbId),
         timestamp: json.messageMetadata.timestamp,
         messageId: json.messageMetadata.messageId,
         attachments: json.attachments
@@ -307,36 +308,98 @@ module.exports = class {
     if (this._listenFns === null) {
       this._listenFns = []
 
+      let parser = mqttParser({ protocolVersion: 4 })
+
+      parser.on('packet', ({ topic, payload }) => {
+        if (topic !== '/t_ms') return
+
+        let json = JSON.parse(payload)
+        if (!json.deltas) return
+
+        for (const delta of json.deltas) {
+          switch (delta.class) {
+            case 'ReadReceipt':
+            case 'MarkFolderSeen':
+            case 'NoOp':
+              continue
+
+            case 'AdminTextMessage':
+              // Theme, emoji, nickname
+              // TODO: Group add remove?
+              // .type: string
+              // .untypedData: any
+              // .messageMetadata: any
+              // ignore if type === 'change_thread_theme
+              continue
+
+            case 'MessageDelete':
+              /*
+                {
+                  actorFbId: '...',
+                  attachments: [],
+                  irisSeqId: '...',
+                  messageIds: [ 'mid.....' ],
+                  requestContext: { apiArgs: {} },
+                  threadKey: { otherUserFbId: '...' },
+                  class: 'MessageDelete'
+                }
+              */
+              // Remove for you
+              continue;
+
+            case 'NewMessage':
+              if (
+                delta.messageMetadata.actorFbId === this.uid &&
+                !this.options.selfListen
+              ) {
+                continue
+              }
+              break;
+
+            case 'ClientPayload':
+              let clientPayload = JSON.parse(
+                Buffer.from(delta.payload).toString()
+              )
+              // FIXME: DEBUG ONLY
+              if (
+                Object.keys(clientPayload).filter(v => v != 'deltas').length > 0
+              ) {
+                this.options.debug && console.debug("Extra keys", Object.keys(clientPayload), "Extra keys")
+              }
+
+              if (clientPayload.deltas && clientPayload.deltas.length > 1) {
+                this.options.debug && console.debug("Several deltas", clientPayload.deltas, "Several deltas")
+              }
+              // END ME FIXME: IDK HELP
+
+              // { deltas: [ { deltaMessageReply: [Object] } ] }
+              // { deltas: [ { deltaMessageReaction: [Object] } ] }
+              // { deltas: [ { deltaUpdateThreadTheme: [Object] } ] }
+              // { deltas: [ { deltaRecallMessageData: [Object] } ] }
+
+              this.options.debug && console.log('PL', clientPayload.deltas[0], 'PL')
+              continue
+
+            default:
+              this.options.debug && console.log(delta.class, delta, delta.class, '\n')
+              continue;
+          }
+
+          for (const callback of this._listenFns) {
+            this._messageQueueIncoming.push(async finish => {
+              await callback(delta)
+              finish()
+            })
+          }
+        }
+      })
+
       this._masterPage._client.on(
         'Network.webSocketFrameReceived',
         async ({ timestamp, response: { payloadData } }) => {
-          if (payloadData.length > 16) {
-            try {
-              // :shrug:
-              // console.log(atob(payloadData), "\n\n\n")
-              const json = JSON.parse(atob(payloadData.substr(16)))
-
-              for (const delta of json.deltas) {
-                if (delta.class !== 'NewMessage') continue
-                if (
-                  delta.messageMetadata.actorFbId === this.uid &&
-                  !this.options.selfListen
-                ) {
-                  continue
-                }
-
-                for (const callback of this._listenFns) {
-                  this._messageQueueIncoming.push(async finish => {
-                    await callback(delta)
-                    finish()
-                  })
-                }
-              }
-            } catch (e) {
-              // * screams in void *
-              //   console.debug(atob(payloadData.substr(16)))
-            }
-          }
+          // FIXME: Only parse if longer than ???
+          payloadData.length > 8 &&
+            parser.parse(Buffer.from(payloadData, 'base64'))
         }
       )
     }
