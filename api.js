@@ -55,7 +55,8 @@ module.exports = class {
     })
 
     const pushQueue = (workerObj, fn) => {
-      this.options.debug && console.debug('Pushing function to worker thread', workerObj.id)
+      this.options.debug &&
+        console.debug('Pushing function to worker thread', workerObj.id)
 
       workerObj.queue.push(async finish => {
         this.options.debug && console.debug('Executing function (finally)')
@@ -67,7 +68,8 @@ module.exports = class {
     }
 
     const replaceWorker = async (workerObj, newThread, hookFn) => {
-      this.options.debug && console.debug('Replacing worker thread queue', workerObj.id)
+      this.options.debug &&
+        console.debug('Replacing worker thread queue', workerObj.id)
       workerObj.thread = null
       workerObj.queue.autostart = false
 
@@ -84,7 +86,8 @@ module.exports = class {
     )
 
     if (target) {
-      this.options.debug && console.debug('Existing worker thread found, pushing')
+      this.options.debug &&
+        console.debug('Existing worker thread found, pushing')
       // Push new action to target worker queue
       pushQueue(target, fn)
     } else {
@@ -102,7 +105,8 @@ module.exports = class {
         } else {
           this.options.debug && console.debug('Reached worker thread capacity')
           if (thread in this._actionQueueOutgoing) {
-            this.options.debug && console.debug('Adding function to existing queue')
+            this.options.debug &&
+              console.debug('Adding function to existing queue')
             this._actionQueueOutgoing[thread].push(fn)
           } else {
             this.options.debug && console.debug('Creating new function queue')
@@ -290,6 +294,7 @@ module.exports = class {
   }
 
   listen (callback) {
+    // Massage -> Maybe have a proxy so we don't assemble the data for every listener
     return this.listenRaw(async json => {
       const data = {
         body: json.body || '',
@@ -300,11 +305,13 @@ module.exports = class {
         attachments: json.attachments
       }
 
+      data.type = json.type
       await callback(data)
     })
   }
 
   listenRaw (callback) {
+    // Should probably move this parsing to the above...
     if (this._listenFns === null) {
       this._listenFns = []
 
@@ -318,6 +325,7 @@ module.exports = class {
 
         for (const delta of json.deltas) {
           switch (delta.class) {
+            case 'DeliveryReceipt':
             case 'ReadReceipt':
             case 'MarkFolderSeen':
             case 'NoOp':
@@ -345,7 +353,7 @@ module.exports = class {
                 }
               */
               // Remove for you
-              continue;
+              continue
 
             case 'NewMessage':
               if (
@@ -354,7 +362,8 @@ module.exports = class {
               ) {
                 continue
               }
-              break;
+              delta.type = 'message'
+              break
 
             case 'ClientPayload':
               let clientPayload = JSON.parse(
@@ -364,11 +373,21 @@ module.exports = class {
               if (
                 Object.keys(clientPayload).filter(v => v != 'deltas').length > 0
               ) {
-                this.options.debug && console.debug("Extra keys", Object.keys(clientPayload), "Extra keys")
+                this.options.debug &&
+                  console.debug(
+                    'Extra keys',
+                    Object.keys(clientPayload),
+                    'Extra keys'
+                  )
               }
 
               if (clientPayload.deltas && clientPayload.deltas.length > 1) {
-                this.options.debug && console.debug("Several deltas", clientPayload.deltas, "Several deltas")
+                this.options.debug &&
+                  console.debug(
+                    'Several deltas',
+                    clientPayload.deltas,
+                    'Several deltas'
+                  )
               }
               // END ME FIXME: IDK HELP
 
@@ -377,12 +396,14 @@ module.exports = class {
               // { deltas: [ { deltaUpdateThreadTheme: [Object] } ] }
               // { deltas: [ { deltaRecallMessageData: [Object] } ] }
 
-              this.options.debug && console.log('PL', clientPayload.deltas[0], 'PL')
+              this.options.debug &&
+                console.log('PL', clientPayload.deltas[0], 'PL')
               continue
 
             default:
-              this.options.debug && console.log(delta.class, delta, delta.class, '\n')
-              continue;
+              this.options.debug &&
+                console.log(delta.class, delta, delta.class, '\n')
+              continue
           }
 
           for (const callback of this._listenFns) {
