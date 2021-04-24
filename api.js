@@ -17,7 +17,9 @@ module.exports = class {
     this._masterPage = null // Holds the master page
     this._workerPages = [] // Holds the worker pages
 
-    this._listenFns = null // Begin as null, changes to [] when primed
+    this._listenFnIsSetUp = false
+    this._listenFns = []
+    this._listenRawFns = null // Begin as null, changes to [] when primed
 
     this._aliasMap = {} // Maps user handles to IDs
 
@@ -282,38 +284,151 @@ module.exports = class {
 
     if (typeof optionalCallback === 'function') {
       client.off('Network.webSocketFrameReceived', optionalCallback)
-      this._listenFns = this._listenFns.filter(
+      this._listenRawFns = this._listenRawFns.filter(
         callback => callback !== optionalCallback
       )
     } else {
-      for (const callback of this._listenFns) {
+      for (const callback of this._listenRawFns) {
         client.off('Network.webSocketFrameReceived', callback)
       }
-      this._listenFns = []
+      this._listenRawFns = []
     }
   }
 
   listen (callback) {
-    // Massage -> Maybe have a proxy so we don't assemble the data for every listener
-    return this.listenRaw(async json => {
-      const data = {
-        body: json.body || '',
-        thread: Number(Object.values(json.messageMetadata.threadKey)[0]),
-        sender: Number(json.messageMetadata.actorFbId),
-        timestamp: json.messageMetadata.timestamp,
-        messageId: json.messageMetadata.messageId,
-        attachments: json.attachments
-      }
+    // When first called, create the data transformer
+    if (!this._listenFnIsSetUp) {
+      this._listenFnIsSetUp = true
 
-      data.type = json.type
-      await callback(data)
-    })
+      this.listenRaw(async rawData => {
+        let ret = {}
+
+        switch (rawData.class) {
+          case 'ReadReceipt':
+          case 'MarkFolderSeen':
+          case 'NoOp':
+          case 'FolderCount':
+          case 'ThreadFolder':
+            return
+
+          case 'AdminTextMessage':
+            // Theme, emoji, nickname
+            // TODO: Group add remove?
+            // .type: string
+            // .untypedData: any
+            // .messageMetadata: any
+            // ignore if type === 'change_thread_theme
+            return
+
+          case 'MessageDelete':
+            // Local message removal, don't care as much
+            // ret = {
+            //   type: 'message_unsend',
+            //   messageId: rawData.messageIds[0]
+            // }
+
+            /*
+              {
+                actorFbId: '...',
+                attachments: [],
+                irisSeqId: '...',
+                messageIds: [ 'mid.....' ],
+                requestContext: { apiArgs: {} },
+                threadKey: { otherUserFbId: '...' },
+                class: 'MessageDelete'
+              }
+            */
+            return
+
+          case 'NewMessage':
+            if (
+              rawData.messageMetadata.actorFbId === this.uid &&
+              !this.options.selfListen
+            ) {
+              return
+            }
+
+            ret = {
+              type: 'message',
+              body: rawData.body || '',
+              thread: Number(
+                Object.values(rawData.messageMetadata.threadKey)[0]
+              ),
+              sender: Number(rawData.messageMetadata.actorFbId),
+              timestamp: rawData.messageMetadata.timestamp,
+              messageId: rawData.messageMetadata.messageId,
+              attachments: rawData.attachments
+            }
+            break
+
+          case 'ClientPayload':
+            let clientPayload = JSON.parse(
+              Buffer.from(rawData.payload).toString()
+            )
+            // FIXME: DEBUG ONLY
+            if (
+              Object.keys(clientPayload).filter(v => v != 'deltas').length > 0
+            ) {
+              this.options.debug &&
+                console.debug(
+                  'Extra keys',
+                  Object.keys(clientPayload),
+                  'Extra keys'
+                )
+            }
+
+            if (clientPayload.deltas && clientPayload.deltas.length > 1) {
+              this.options.debug &&
+                console.debug(
+                  'Several deltas',
+                  clientPayload.deltas,
+                  'Several deltas'
+                )
+            }
+
+            let deltaType = Object.keys(clientPayload.deltas[0])[0]
+            let delta = clientPayload.deltas[0][deltaType]
+
+            this.options.debug && console.debug(deltaType, delta)
+
+
+            switch (deltaType) {
+              case 'deltaRecallMessageData':
+                ret = {
+                  type: 'message_unsend',
+                  thread: Object.values(delta.threadKey)[0],
+                  messageId: delta.messageID,
+                  timestamp: delta.deletionTimestamp
+                }
+                break
+              default:
+                this.options.debug && console.debug(deltaType, delta)
+            }
+
+            break
+          // { deltas: [ { deltaMessageReply: [Object] } ] }
+          // { deltas: [ { deltaMessageReaction: [Object] } ] }
+          // { deltas: [ { deltaUpdateThreadTheme: [Object] } ] }
+          // { deltas: [ { deltaRecallMessageData: [Object] } ] }
+
+          default:
+            this.options.debug &&
+              console.log(rawData.class, rawData, rawData.class, '\n')
+            return
+        }
+
+        for (let callback of this._listenFns) {
+          callback(ret)
+        }
+      })
+    }
+
+    this._listenFns.push(callback)
   }
 
   listenRaw (callback) {
-    // Should probably move this parsing to the above...
-    if (this._listenFns === null) {
-      this._listenFns = []
+    if (this._listenRawFns === null) {
+      this._listenRawFns = []
 
       let parser = mqttParser({ protocolVersion: 4 })
 
@@ -323,90 +438,8 @@ module.exports = class {
         let json = JSON.parse(payload)
         if (!json.deltas) return
 
-        for (const delta of json.deltas) {
-          switch (delta.class) {
-            case 'DeliveryReceipt':
-            case 'ReadReceipt':
-            case 'MarkFolderSeen':
-            case 'NoOp':
-              continue
-
-            case 'AdminTextMessage':
-              // Theme, emoji, nickname
-              // TODO: Group add remove?
-              // .type: string
-              // .untypedData: any
-              // .messageMetadata: any
-              // ignore if type === 'change_thread_theme
-              continue
-
-            case 'MessageDelete':
-              /*
-                {
-                  actorFbId: '...',
-                  attachments: [],
-                  irisSeqId: '...',
-                  messageIds: [ 'mid.....' ],
-                  requestContext: { apiArgs: {} },
-                  threadKey: { otherUserFbId: '...' },
-                  class: 'MessageDelete'
-                }
-              */
-              // Remove for you
-              continue
-
-            case 'NewMessage':
-              if (
-                delta.messageMetadata.actorFbId === this.uid &&
-                !this.options.selfListen
-              ) {
-                continue
-              }
-              delta.type = 'message'
-              break
-
-            case 'ClientPayload':
-              let clientPayload = JSON.parse(
-                Buffer.from(delta.payload).toString()
-              )
-              // FIXME: DEBUG ONLY
-              if (
-                Object.keys(clientPayload).filter(v => v != 'deltas').length > 0
-              ) {
-                this.options.debug &&
-                  console.debug(
-                    'Extra keys',
-                    Object.keys(clientPayload),
-                    'Extra keys'
-                  )
-              }
-
-              if (clientPayload.deltas && clientPayload.deltas.length > 1) {
-                this.options.debug &&
-                  console.debug(
-                    'Several deltas',
-                    clientPayload.deltas,
-                    'Several deltas'
-                  )
-              }
-              // END ME FIXME: IDK HELP
-
-              // { deltas: [ { deltaMessageReply: [Object] } ] }
-              // { deltas: [ { deltaMessageReaction: [Object] } ] }
-              // { deltas: [ { deltaUpdateThreadTheme: [Object] } ] }
-              // { deltas: [ { deltaRecallMessageData: [Object] } ] }
-
-              this.options.debug &&
-                console.log('PL', clientPayload.deltas[0], 'PL')
-              continue
-
-            default:
-              this.options.debug &&
-                console.log(delta.class, delta, delta.class, '\n')
-              continue
-          }
-
-          for (const callback of this._listenFns) {
+        for (let delta of json.deltas) {
+          for (const callback of this._listenRawFns) {
             this._messageQueueIncoming.push(async finish => {
               await callback(delta)
               finish()
@@ -425,8 +458,8 @@ module.exports = class {
       )
     }
 
-    if (this._listenFns.indexOf(callback) === -1) {
-      this._listenFns.push(callback)
+    if (this._listenRawFns.indexOf(callback) === -1) {
+      this._listenRawFns.push(callback)
     }
 
     return () => this._stopListen(callback)
